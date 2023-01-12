@@ -1,0 +1,37 @@
+{{- $cfg := (merge (dict "name" "webhook-certificate-patch-post" "module" "webhook-certificate-patch") .) -}}
+{{- $rbacConfig := (merge (dict "name" "webhook-certificate-patch") .) -}}
+{{- $webhookConfig := (merge (dict "name" "webhook" "module" "webhook") .) -}}
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "liqo.prefixedName" $cfg }}
+  annotations:
+    "helm.sh/hook": post-install
+    "hook-weight": "-1"
+    "helm.sh/hook-delete-policy": hook-succeeded
+  labels:
+    {{- include "liqo.labels" $cfg | nindent 4 }}
+spec:
+  ttlSecondsAfterFinished: 0
+  template:
+    metadata:
+      name:  {{ include "liqo.prefixedName" $cfg }}
+      labels:
+        {{- include "liqo.labels" $cfg | nindent 8 }}
+    spec:
+      containers:
+      - name: create
+        image: {{ .Values.webhook.patch.image }}
+        imagePullPolicy: {{ .Values.pullPolicy }}
+        args:
+        - patch
+        - --webhook-name={{ include "liqo.prefixedName" $webhookConfig }}
+        - --namespace={{ .Release.Namespace }}
+        - --secret-name={{ include "liqo.prefixedName" $webhookConfig }}-certs
+        securityContext:
+          {{- include "liqo.containerSecurityContext" . | nindent 10 }}
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "liqo.prefixedName" $rbacConfig }}
+      securityContext:
+        {{- include "liqo.podSecurityContext" . | nindent 8 }}
